@@ -51,7 +51,7 @@ class StructureMapper(ABC):
 
     def __init__(self):
         self.__txt_para_splitter = '\n'
-        self.__md_para_splitter = '\n\n'
+        self.__md_para_splitter = ''
         self.__text_end = '\n'
         self.__list_item_start = '-'  # md里的列表项前缀
         self.__list_para_prefix = '  '  # 两个空格，md里的列表项非第一个段落的前缀：如果多个段落的情况，第二个以及之后的段落前缀
@@ -117,6 +117,8 @@ class StructureMapper(ABC):
                 if content_lst_node['type'] not in exclude_nodes:
                     txt_content = self.__content_lst_node_2_md(content_lst_node, exclude_inline_types,
                                                                use_raw_image_url)
+                    if len(md_blocks) > 0 and not txt_content.startswith("\n") and not md_blocks[-1].endswith("\n"):  # 若段落间没有换行，则添加换行
+                        md_blocks.append("\n\n")
                     if txt_content and len(txt_content) > 0:
                         md_blocks.append(txt_content)
 
@@ -151,22 +153,6 @@ class StructureMapper(ABC):
         self.__validate_exclude_nodes(exclude_nodes, exclude_inline_types)
         md = self.__to_md(exclude_nodes, exclude_inline_types, use_raw_image_url)
         return md
-
-    def to_main_html(self) -> str:
-        """拼接和每个content_list_node对应的html内容，返回一个完整的html文档.
-
-        Args:
-            content_lst_node (dict): content_list里定义的每种元素块
-        Returns:
-            str: html格式
-        """
-        content_lst = self._get_data()
-        html = ''
-        for page in content_lst:
-            for content_lst_node in page:
-                raw_html = content_lst_node['raw_content']
-                html += raw_html
-        return html
 
     def to_json(self, pretty=False) -> str:
         content_lst = self._get_data()
@@ -296,9 +282,9 @@ class StructureMapper(ABC):
             image_data = content_lst_node['content'].get('data', '')
             image_alt = content_lst_node['content'].get('alt', '')
             image_title = content_lst_node['content'].get('title', '')
-            image_caption = content_lst_node['content'].get('caption', '')
+            image_caption = content_lst_node['content'].get('caption', [])
             image_url = content_lst_node['content'].get('url', '')
-
+            image_footnote = content_lst_node['content'].get('footnote', [])
             if not image_path and not image_data:
                 image_path = sha256_hash(image_url)
 
@@ -315,10 +301,15 @@ class StructureMapper(ABC):
             else:
                 image_title = ''
 
-            if image_caption:
-                image_caption = image_caption.strip()
+            if len(image_caption) > 0:
+                image_caption = image_caption[0].strip()
             else:
                 image_caption = ''
+
+            if len(image_footnote) > 0:
+                image_footnote = image_footnote[0].strip()
+            else:
+                image_footnote = ''
 
             image_des = image_title if image_title else ''
             # 优先使用data, 其次path.其中data是base64编码的图片，path是图片的url
@@ -337,6 +328,9 @@ class StructureMapper(ABC):
                 image_with_caption = f'{image}\n\n{image_caption}'
             else:
                 image_with_caption = image
+
+            if image_footnote:
+                image_with_caption = f'{image_with_caption}\n\n{image_footnote}'
 
             return image_with_caption
         elif node_type == DocElementType.AUDIO:
