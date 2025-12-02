@@ -6,11 +6,14 @@
 from typing import Any, Dict, Optional
 
 import httpx
+import time
 
 from llm_web_kit.api.dependencies import (get_inference_service, get_logger,
                                           get_settings)
 from llm_web_kit.simple import extract_content_from_main_html
-
+from llm_web_kit.input.pre_data_json import (PreDataJson,PreDataJsonKey)
+from llm_web_kit.main_html_parser.parser.tag_mapping import MapItemToHtmlTagsParser
+from llm_web_kit.main_html_parser.simplify_html.simplify_html import simplify_html
 logger = get_logger(__name__)
 settings = get_settings()
 
@@ -35,6 +38,7 @@ class HTMLService:
         self,
         html_content: Optional[str] = None,
         url: Optional[str] = None,
+        request_id: str = None,
         options: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """解析 HTML 内容."""
@@ -58,39 +62,39 @@ class HTMLService:
                     raise ValueError(f'处理爬取内容时发生错误: {e}')
 
             if not html_content:
-                raise ValueError('必须提供 HTML 内容或有效的 URL')
+                raise ValueError(f'必须提供 HTML 内容或有效的 URL')
 
-            # 延迟导入，避免模块导入期异常导致服务类不可用
-            try:
-                from llm_web_kit.input.pre_data_json import (PreDataJson,
-                                                             PreDataJsonKey)
-                from llm_web_kit.main_html_parser.parser.tag_mapping import \
-                    MapItemToHtmlTagsParser
-                from llm_web_kit.main_html_parser.simplify_html.simplify_html import \
-                    simplify_html
-            except Exception as import_err:
-                logger.error(f'依赖导入失败: {import_err}')
-                raise
-
+            # logger.info(f"html_content: {html_content}")
             # 简化网页
             try:
+                start_time = time.time()
                 simplified_html, typical_raw_tag_html = simplify_html(html_content)
+                end_time = time.time()
+                logger.info(f'简化完成， 耗时: {end_time - start_time}秒')
             except Exception as e:
                 logger.error(f'简化网页失败: {e}')
                 raise
 
             # 模型推理
+            start_time = time.time()
             llm_response = await self._parse_with_model(simplified_html, options)
-
+            end_time = time.time()
+            logger.info(f'模型推理总耗时: {end_time - start_time}秒')
             # 结果映射
+            start_time = time.time()
             pre_data = PreDataJson({})
             pre_data[PreDataJsonKey.TYPICAL_RAW_HTML] = html_content
             pre_data[PreDataJsonKey.TYPICAL_RAW_TAG_HTML] = typical_raw_tag_html
             pre_data[PreDataJsonKey.LLM_RESPONSE] = llm_response
             parser = MapItemToHtmlTagsParser({})
             pre_data = parser.parse_single(pre_data)
+            end_time = time.time()
+            logger.info(f'映射耗时: {end_time - start_time}秒')
             main_html = pre_data[PreDataJsonKey.TYPICAL_MAIN_HTML]
+            start_time = time.time()
             mm_nlp_md = extract_content_from_main_html(url, main_html, 'mm_md', use_raw_image_url=True)
+            end_time = time.time()
+            logger.info(f'抽取markdown耗时: {end_time - start_time}秒')
             pre_data['markdown'] = mm_nlp_md
             # 将 PreDataJson 转为标准 dict，避免响应模型校验错误
             return dict(pre_data.items())

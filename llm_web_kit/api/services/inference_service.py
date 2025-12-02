@@ -31,7 +31,7 @@ class InferenceConfig:
     max_output_tokens: int = 8192
     tensor_parallel_size: int = 1
     # 测试环境修改为float16
-    dtype: str = 'bfloat16'
+    dtype: str = 'float16'
     template: bool = True
 
 
@@ -293,6 +293,7 @@ class InferenceService:
         """初始化推理服务，延迟加载模型."""
         self._llm = None
         self._tokenizer = None
+        self._sampling_params = None  # 新增采样参数成员
         self._initialized = False
         self._init_lock = None  # 用于异步初始化锁
         self._model_path = None
@@ -340,10 +341,26 @@ class InferenceService:
                 dtype=config.dtype,
                 tensor_parallel_size=config.tensor_parallel_size,
                 # 测试环境取消注释
-                # max_model_len=config.max_tokens,  # 减少序列长度避免内存不足
+                max_model_len=config.max_tokens,  # 减少序列长度避免内存不足
             )
 
-            logger.info(f'模型初始化成功: {self.model_path}')
+            # 在初始化时创建采样参数
+            if config.use_logits_processor:
+                token_state = Token_state(self.model_path)
+                self._sampling_params = SamplingParams(
+                    temperature=config.temperature,
+                    top_p=config.top_p,
+                    max_tokens=config.max_output_tokens,
+                    logits_processors=[token_state.process_logit]
+                )
+            else:
+                self._sampling_params = SamplingParams(
+                    temperature=config.temperature,
+                    top_p=config.top_p,
+                    max_tokens=config.max_output_tokens
+                )
+
+            logger.info(f'模型和采样参数初始化成功: {self.model_path}')
 
         except Exception as e:
             logger.error(f'模型初始化失败: {e}')
@@ -374,31 +391,21 @@ class InferenceService:
             prompt = create_prompt(simplified_html)
             chat_prompt = add_template(prompt, self._tokenizer)
 
-            # 设置采样参数
-            if config.use_logits_processor:
-                token_state = Token_state(self.model_path)
-                sampling_params = SamplingParams(
-                    temperature=config.temperature,
-                    top_p=config.top_p,
-                    max_tokens=config.max_output_tokens,
-                    logits_processors=[token_state.process_logit]
-                )
-            else:
-                sampling_params = SamplingParams(
-                    temperature=config.temperature,
-                    top_p=config.top_p,
-                    max_tokens=config.max_output_tokens
-                )
+            # 直接使用初始化好的采样参数
+            if self._sampling_params is None:
+                logger.error("采样参数未初始化，返回占位结果")
+                return self._get_placeholder_result()
 
             # 执行推理
             start_time = time.time()
-            output = self._llm.generate(chat_prompt, sampling_params)
+            output = self._llm.generate(chat_prompt, self._sampling_params)
             end_time = time.time()
             output_json = clean_output(output)
 
             # 格式化结果
             result = reformat_map(output_json)
-            logger.info(f'推理完成，结果: {result}, 耗时: {end_time - start_time}秒')
+            logger.info(f'推理完成，结果：{result}')
+            logger.info(f'推理完成， 耗时: {end_time - start_time}秒')
             return result
 
         except Exception as e:

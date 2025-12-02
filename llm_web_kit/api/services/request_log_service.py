@@ -10,6 +10,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..database import get_db_manager
 from ..dependencies import get_logger
 from ..models.db_models import RequestLog
 
@@ -19,7 +20,7 @@ logger = get_logger(__name__)
 class RequestLogService:
     """请求日志服务类."""
     @staticmethod
-    def generate_request_id() -> str:
+    def _generate_request_id() -> str:
         """生成唯一的请求ID."""
         return str(uuid.uuid4())
 
@@ -64,6 +65,28 @@ class RequestLogService:
             return None
 
     @staticmethod
+    async def initial_log(
+        session: Optional[AsyncSession],
+        request_id: str,
+        input_type: str,
+        input_html: Optional[str] = None,
+        url: Optional[str] = None,
+    ):
+        """创建并提交初始日志."""
+        if not session:
+            logger.debug("数据库会话为空，跳过初始日志记录")
+            return
+
+        await RequestLogService.create_log(
+            session, request_id, input_type, input_html, url
+        )
+        try:
+            await session.commit()
+        except Exception as e:
+            logger.error(f"提交初始日志时出错: {e}")
+            await session.rollback()
+
+    @staticmethod
     async def update_log_success(
         session: Optional[AsyncSession],
         request_id: str,
@@ -98,6 +121,18 @@ class RequestLogService:
         except Exception as e:
             logger.error(f"更新请求日志失败: {e}")
             return False
+
+    @staticmethod
+    async def log_success_bg(request_id: str, output_markdown: Optional[str] = None):
+        """作为后台任务更新日志为成功."""
+        async with get_db_manager().get_session() as bg_session:
+            updated = await RequestLogService.update_log_success(
+                session=bg_session,
+                request_id=request_id,
+                output_markdown=output_markdown,
+            )
+            if updated:
+                await bg_session.commit()
 
     @staticmethod
     async def update_log_failure(
@@ -135,6 +170,18 @@ class RequestLogService:
         except Exception as e:
             logger.error(f"更新请求日志失败: {e}")
             return False
+
+    @staticmethod
+    async def log_failure_bg(request_id: str, error_message: str):
+        """作为后台任务更新日志为失败."""
+        async with get_db_manager().get_session() as bg_session:
+            updated = await RequestLogService.update_log_failure(
+                session=bg_session,
+                request_id=request_id,
+                error_message=error_message,
+            )
+            if updated:
+                await bg_session.commit()
 
     @staticmethod
     async def get_log_by_request_id(
