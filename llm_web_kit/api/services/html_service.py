@@ -3,17 +3,19 @@
 桥接原有项目的 HTML 解析和内容提取功能，提供统一的 API 接口。
 """
 
+import time
 from typing import Any, Dict, Optional
 
 import httpx
-import time
 
 from llm_web_kit.api.dependencies import (get_inference_service, get_logger,
                                           get_settings)
+from llm_web_kit.input.pre_data_json import PreDataJson, PreDataJsonKey
+from llm_web_kit.main_html_parser.parser.tag_mapping import \
+    MapItemToHtmlTagsParser
+from llm_web_kit.main_html_parser.simplify_html.simplify_html import \
+    simplify_html
 from llm_web_kit.simple import extract_content_from_main_html
-from llm_web_kit.input.pre_data_json import (PreDataJson, PreDataJsonKey)
-from llm_web_kit.main_html_parser.parser.tag_mapping import MapItemToHtmlTagsParser
-from llm_web_kit.main_html_parser.simplify_html.simplify_html import simplify_html
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -63,7 +65,7 @@ class HTMLService:
                     raise ValueError(f'处理爬取内容时发生错误: {e}')
 
             if not html_content:
-                raise ValueError(f'必须提供 HTML 内容或有效的 URL')
+                raise ValueError('必须提供 HTML 内容或有效的 URL')
 
             # logger.info(f"html_content: {html_content}")
             # 简化网页
@@ -127,6 +129,5 @@ if __name__ == '__main__':
             data = response.json()
             html_content = data.get('html')
             print(html_content)
-
 
     asyncio.run(main())

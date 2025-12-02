@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .dependencies import (get_inference_service, get_logger, get_settings,
-                         request_id_var)
+                           request_id_var)
 from .routers import htmls
 from .services.request_log_service import RequestLogService
 
@@ -38,9 +38,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
-    """
-    中间件，用于生成 request_id 并通过 ContextVar 在整个请求周期中传递。
-    """
+    """中间件，用于生成 request_id 并通过 ContextVar 在整个请求周期中传递。"""
     # 从请求头中获取 request_id，如果不存在则生成一个新的
     request_id = request.headers.get("X-Request-ID")
     if not request_id:

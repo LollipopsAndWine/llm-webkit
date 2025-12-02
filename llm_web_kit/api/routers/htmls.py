@@ -3,16 +3,16 @@
 提供 HTML 解析、内容提取等功能的 API 端点。
 """
 
-import time
-from typing import Optional
 import base64
 import html
+import time
+from typing import Optional
 
 from fastapi import (APIRouter, BackgroundTasks, Body, Depends, File,
                      HTTPException, UploadFile)
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database import get_db_manager, get_db_session
+from ..database import get_db_session
 from ..dependencies import get_logger, get_settings, request_id_var
 from ..models.request import HTMLParseRequest
 from ..models.response import HTMLParseResponse

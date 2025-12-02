@@ -4,11 +4,11 @@
 """
 
 import logging
+import os
 from contextvars import ContextVar
 from functools import lru_cache
-from typing import Optional
-import os
 from logging.handlers import TimedRotatingFileHandler
+from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,9 +19,7 @@ request_id_var: ContextVar[Optional[str]] = ContextVar("request_id", default=Non
 
 
 class RequestIdFilter(logging.Filter):
-    """
-    日志过滤器，用于将 request_id 从 ContextVar 注入到日志记录中。
-    """
+    """日志过滤器，用于将 request_id 从 ContextVar 注入到日志记录中。"""
 
     def filter(self, record):
         record.request_id = request_id_var.get()
