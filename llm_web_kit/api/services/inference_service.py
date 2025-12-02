@@ -31,7 +31,7 @@ class InferenceConfig:
     max_output_tokens: int = 8192
     tensor_parallel_size: int = 1
     # 测试环境修改为float16
-    dtype: str = 'float16'
+    dtype: str = 'bfloat16'
     template: bool = True
 
 
@@ -341,7 +341,7 @@ class InferenceService:
                 dtype=config.dtype,
                 tensor_parallel_size=config.tensor_parallel_size,
                 # 测试环境取消注释
-                max_model_len=config.max_tokens,  # 减少序列长度避免内存不足
+                # max_model_len=config.max_tokens,  # 减少序列长度避免内存不足
             )
 
             # 在初始化时创建采样参数

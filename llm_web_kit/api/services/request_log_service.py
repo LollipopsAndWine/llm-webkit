@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 
 class RequestLogService:
     """请求日志服务类."""
+
     @staticmethod
     def _generate_request_id() -> str:
         """生成唯一的请求ID."""
@@ -26,11 +27,11 @@ class RequestLogService:
 
     @staticmethod
     async def create_log(
-        session: Optional[AsyncSession],
-        request_id: str,
-        input_type: str,
-        input_html: Optional[str] = None,
-        url: Optional[str] = None,
+            session: Optional[AsyncSession],
+            request_id: str,
+            input_type: str,
+            input_html: Optional[str] = None,
+            url: Optional[str] = None,
     ) -> Optional[RequestLog]:
         """创建请求日志记录.
 
@@ -66,11 +67,11 @@ class RequestLogService:
 
     @staticmethod
     async def initial_log(
-        session: Optional[AsyncSession],
-        request_id: str,
-        input_type: str,
-        input_html: Optional[str] = None,
-        url: Optional[str] = None,
+            session: Optional[AsyncSession],
+            request_id: str,
+            input_type: str,
+            input_html: Optional[str] = None,
+            url: Optional[str] = None,
     ):
         """创建并提交初始日志."""
         if not session:
@@ -88,9 +89,9 @@ class RequestLogService:
 
     @staticmethod
     async def update_log_success(
-        session: Optional[AsyncSession],
-        request_id: str,
-        output_markdown: Optional[str] = None,
+            session: Optional[AsyncSession],
+            request_id: str,
+            output_markdown: Optional[str] = None,
     ) -> bool:
         """更新请求日志为成功状态.
 
@@ -136,9 +137,9 @@ class RequestLogService:
 
     @staticmethod
     async def update_log_failure(
-        session: Optional[AsyncSession],
-        request_id: str,
-        error_message: str,
+            session: Optional[AsyncSession],
+            request_id: str,
+            error_message: str,
     ) -> bool:
         """更新请求日志为失败状态.
 
@@ -185,8 +186,8 @@ class RequestLogService:
 
     @staticmethod
     async def get_log_by_request_id(
-        session: Optional[AsyncSession],
-        request_id: str,
+            session: Optional[AsyncSession],
+            request_id: str,
     ) -> Optional[RequestLog]:
         """根据请求ID查询日志.
 

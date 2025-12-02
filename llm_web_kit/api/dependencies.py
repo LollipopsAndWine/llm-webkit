@@ -22,6 +22,7 @@ class RequestIdFilter(logging.Filter):
     """
     日志过滤器，用于将 request_id 从 ContextVar 注入到日志记录中。
     """
+
     def filter(self, record):
         record.request_id = request_id_var.get()
         return True

@@ -27,10 +27,10 @@ router = APIRouter()
 
 @router.post('/html/parse', response_model=HTMLParseResponse)
 async def parse_html(
-    background_tasks: BackgroundTasks,
-    request: HTMLParseRequest = Body(...),
-    html_service: HTMLService = Depends(HTMLService),
-    db_session: Optional[AsyncSession] = Depends(get_db_session)
+        background_tasks: BackgroundTasks,
+        request: HTMLParseRequest = Body(...),
+        html_service: HTMLService = Depends(HTMLService),
+        db_session: Optional[AsyncSession] = Depends(get_db_session)
 ):
     """解析 HTML 内容.
 
@@ -101,10 +101,10 @@ async def parse_html(
 
 @router.post('/html/upload')
 async def upload_html_file(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    html_service: HTMLService = Depends(HTMLService),
-    db_session: Optional[AsyncSession] = Depends(get_db_session)
+        background_tasks: BackgroundTasks,
+        file: UploadFile = File(...),
+        html_service: HTMLService = Depends(HTMLService),
+        db_session: Optional[AsyncSession] = Depends(get_db_session)
 ):
     """上传 HTML 文件进行解析.
 

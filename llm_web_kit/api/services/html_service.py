@@ -11,9 +11,10 @@ import time
 from llm_web_kit.api.dependencies import (get_inference_service, get_logger,
                                           get_settings)
 from llm_web_kit.simple import extract_content_from_main_html
-from llm_web_kit.input.pre_data_json import (PreDataJson,PreDataJsonKey)
+from llm_web_kit.input.pre_data_json import (PreDataJson, PreDataJsonKey)
 from llm_web_kit.main_html_parser.parser.tag_mapping import MapItemToHtmlTagsParser
 from llm_web_kit.main_html_parser.simplify_html.simplify_html import simplify_html
+
 logger = get_logger(__name__)
 settings = get_settings()
 
@@ -35,11 +36,11 @@ class HTMLService:
         return None
 
     async def parse_html(
-        self,
-        html_content: Optional[str] = None,
-        url: Optional[str] = None,
-        request_id: str = None,
-        options: Optional[Dict[str, Any]] = None
+            self,
+            html_content: Optional[str] = None,
+            url: Optional[str] = None,
+            request_id: str = None,
+            options: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """解析 HTML 内容."""
         try:
@@ -114,14 +115,18 @@ if __name__ == '__main__':
 
     # 重新导入以确保加载最新的代码，绕过缓存问题
     from llm_web_kit.api.dependencies import get_settings
+
     settings = get_settings()
 
     async def main():
         async with httpx.AsyncClient() as client:
-            response = await client.post(settings.crawl_url, json={'url': 'https://aws.amazon.com/what-is/retrieval-augmented-generation/'}, timeout=60)
+            response = await client.post(settings.crawl_url,
+                                         json={'url': 'https://aws.amazon.com/what-is/retrieval-augmented-generation/'},
+                                         timeout=60)
             response.raise_for_status()
             data = response.json()
             html_content = data.get('html')
             print(html_content)
+
 
     asyncio.run(main())
