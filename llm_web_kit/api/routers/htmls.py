@@ -3,13 +3,17 @@
 提供 HTML 解析、内容提取等功能的 API 端点。
 """
 
+import base64
+import html
+import time
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import (APIRouter, BackgroundTasks, Body, Depends, File,
+                     HTTPException, UploadFile)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db_session
-from ..dependencies import get_logger, get_settings
+from ..dependencies import get_logger, get_settings, request_id_var
 from ..models.request import HTMLParseRequest
 from ..models.response import HTMLParseResponse
 from ..services.html_service import HTMLService
@@ -23,16 +27,20 @@ router = APIRouter()
 
 @router.post('/html/parse', response_model=HTMLParseResponse)
 async def parse_html(
-    request: HTMLParseRequest,
-    html_service: HTMLService = Depends(HTMLService),
-    db_session: Optional[AsyncSession] = Depends(get_db_session)
+        background_tasks: BackgroundTasks,
+        request: HTMLParseRequest = Body(...),
+        html_service: HTMLService = Depends(HTMLService),
+        db_session: Optional[AsyncSession] = Depends(get_db_session)
 ):
     """解析 HTML 内容.
 
     接收 HTML 字符串并返回解析后的结构化内容。
     """
-    # 生成请求ID
-    request_id = RequestLogService.generate_request_id()
+    # 从 context var 获取 request_id
+    request_id = request_id_var.get()
+    decoded_bytes = base64.b64decode(request.html_content)
+    decoded_str = decoded_bytes.decode('utf-8')
+    unescaped_html = html.unescape(decoded_str)
 
     # 确定输入类型
     if request.html_content:
@@ -43,35 +51,32 @@ async def parse_html(
         input_type = 'unknown'
 
     # 创建请求日志
-    await RequestLogService.create_log(
+    start_time = time.time()
+    await RequestLogService.initial_log(
         session=db_session,
         request_id=request_id,
         input_type=input_type,
-        input_html=request.html_content,
+        input_html=unescaped_html,
         url=request.url,
     )
-
-    # 立即提交，使 processing 状态在数据库中可见
-    if db_session:
-        try:
-            await db_session.commit()
-        except Exception as commit_error:
-            logger.error(f'提交初始日志时出错: {commit_error}')
+    end_time = time.time()
+    logger.info(f'创建日志耗时: {end_time - start_time}秒')
 
     try:
-        logger.info(f'开始解析 HTML [request_id={request_id}]，内容长度: {len(request.html_content) if request.html_content else 0}')
+        logger.info(f'开始解析 HTML，内容长度: {len(unescaped_html) if unescaped_html else 0}')
 
         result = await html_service.parse_html(
-            html_content=request.html_content,
+            html_content=unescaped_html,
             url=request.url,
+            request_id=request_id,
             options=request.options
         )
 
-        # 更新日志为成功
-        await RequestLogService.update_log_success(
-            session=db_session,
-            request_id=request_id,
-            output_markdown=result.get('markdown'),
+        # 将成功日志更新操作添加到后台任务
+        background_tasks.add_task(
+            RequestLogService.log_success_bg,
+            request_id,
+            result.get('markdown')
         )
 
         return HTMLParseResponse(
@@ -81,37 +86,32 @@ async def parse_html(
             request_id=request_id
         )
     except Exception as e:
-        logger.error(f'HTML 解析失败 [request_id={request_id}]: {str(e)}')
+        error_message = str(e)
+        logger.error(f'HTML 解析失败: {error_message}')
 
-        # 更新日志为失败
-        await RequestLogService.update_log_failure(
-            session=db_session,
-            request_id=request_id,
-            error_message=str(e),
+        # 将失败日志更新操作添加到后台任务
+        background_tasks.add_task(
+            RequestLogService.log_failure_bg,
+            request_id,
+            error_message
         )
 
-        # 手动提交事务，确保失败日志被保存
-        if db_session:
-            try:
-                await db_session.commit()
-            except Exception as commit_error:
-                logger.error(f'提交失败日志时出错: {commit_error}')
-
-        raise HTTPException(status_code=500, detail=f'HTML 解析失败: {str(e)}')
+        raise HTTPException(status_code=500, detail=f'HTML 解析失败: {error_message}')
 
 
 @router.post('/html/upload')
 async def upload_html_file(
-    file: UploadFile = File(...),
-    html_service: HTMLService = Depends(HTMLService),
-    db_session: Optional[AsyncSession] = Depends(get_db_session)
+        background_tasks: BackgroundTasks,
+        file: UploadFile = File(...),
+        html_service: HTMLService = Depends(HTMLService),
+        db_session: Optional[AsyncSession] = Depends(get_db_session)
 ):
     """上传 HTML 文件进行解析.
 
     支持上传 HTML 文件，自动解析并返回结果。
     """
-    # 生成请求ID
-    request_id = RequestLogService.generate_request_id()
+    # 从 context var 获取 request_id
+    request_id = request_id_var.get()
 
     try:
         if not file.filename.endswith(('.html', '.htm')):
@@ -120,31 +120,26 @@ async def upload_html_file(
         content = await file.read()
         html_content = content.decode('utf-8')
 
-        logger.info(f'上传 HTML 文件 [request_id={request_id}]: {file.filename}, 大小: {len(content)} bytes')
-
+        logger.info(f'上传 HTML 文件: {file.filename}, 大小: {len(content)} bytes')
+        start_time = time.time()
         # 创建请求日志
-        await RequestLogService.create_log(
+        await RequestLogService.initial_log(
             session=db_session,
             request_id=request_id,
             input_type='file',
             input_html=html_content,
             url=None,
         )
+        end_time = time.time()
+        logger.info(f'创建日志耗时: {end_time - start_time}秒')
 
-        # 立即提交，使 processing 状态在数据库中可见
-        if db_session:
-            try:
-                await db_session.commit()
-            except Exception as commit_error:
-                logger.error(f'提交初始日志时出错: {commit_error}')
+        result = await html_service.parse_html(html_content=html_content, url="www.baidu.com", request_id=request_id)
 
-        result = await html_service.parse_html(html_content=html_content, url="www.baidu.com")
-
-        # 更新日志为成功
-        await RequestLogService.update_log_success(
-            session=db_session,
-            request_id=request_id,
-            output_markdown=result.get('markdown'),
+        # 将成功日志更新操作添加到后台任务
+        background_tasks.add_task(
+            RequestLogService.log_success_bg,
+            request_id,
+            result.get('markdown')
         )
 
         return HTMLParseResponse(
@@ -154,23 +149,17 @@ async def upload_html_file(
             request_id=request_id
         )
     except Exception as e:
-        logger.error(f'HTML 文件解析失败 [request_id={request_id}]: {str(e)}')
+        error_message = str(e)
+        logger.error(f'HTML 文件解析失败: {error_message}')
 
-        # 更新日志为失败
-        await RequestLogService.update_log_failure(
-            session=db_session,
-            request_id=request_id,
-            error_message=str(e),
+        # 将失败日志更新操作添加到后台任务
+        background_tasks.add_task(
+            RequestLogService.log_failure_bg,
+            request_id,
+            error_message
         )
 
-        # 手动提交事务，确保失败日志被保存
-        if db_session:
-            try:
-                await db_session.commit()
-            except Exception as commit_error:
-                logger.error(f'提交失败日志时出错: {commit_error}')
-
-        raise HTTPException(status_code=500, detail=f'HTML 文件解析失败: {str(e)}')
+        raise HTTPException(status_code=500, detail=f'HTML 文件解析失败: {error_message}')
 
 
 @router.get('/html/status')

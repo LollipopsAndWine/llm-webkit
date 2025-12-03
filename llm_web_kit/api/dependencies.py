@@ -4,12 +4,26 @@
 """
 
 import logging
+import os
+from contextvars import ContextVar
 from functools import lru_cache
+from logging.handlers import TimedRotatingFileHandler
 from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
+
+# 创建一个 ContextVar 用于存储 request_id，提供默认值
+request_id_var: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
+
+
+class RequestIdFilter(logging.Filter):
+    """日志过滤器，用于将 request_id 从 ContextVar 注入到日志记录中。"""
+
+    def filter(self, record):
+        record.request_id = request_id_var.get()
+        return True
 
 
 class Settings(BaseSettings):
@@ -27,6 +41,8 @@ class Settings(BaseSettings):
 
     # 日志配置
     log_level: str = "INFO"
+    log_dir: str = "logs"
+    log_filename: str = "api.log"
 
     # 模型配置
     model_path: Optional[str] = None
@@ -38,8 +54,8 @@ class Settings(BaseSettings):
 
     # 数据库配置
     database_url: Optional[str] = None  # 从环境变量 DATABASE_URL 读取
-    db_pool_size: int = 5
-    db_max_overflow: int = 10
+    db_pool_size: int = 200
+    db_max_overflow: int = 100
 
     # pydantic v2 配置写法
     model_config = SettingsConfigDict(
@@ -57,14 +73,39 @@ def get_settings() -> Settings:
 def get_logger(name: str = __name__) -> logging.Logger:
     """获取配置好的日志记录器."""
     logger = logging.getLogger(name)
+    logger.setLevel(get_settings().log_level)
+    logger.addFilter(RequestIdFilter())  # 添加过滤器
+
     if not logger.handlers:
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        # 控制台处理器
+        stream_handler = logging.StreamHandler()
+        stream_formatter = logging.Formatter(
+            '%(asctime)s - %(request_id)s - %(name)s - %(levelname)s - %(message)s'
         )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        logger.setLevel(get_settings().log_level)
+        stream_handler.setFormatter(stream_formatter)
+        logger.addHandler(stream_handler)
+
+        # 文件处理器 (按天轮换)
+        settings = get_settings()
+        log_dir = settings.log_dir
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+
+        log_file_path = os.path.join(log_dir, settings.log_filename)
+
+        file_handler = TimedRotatingFileHandler(
+            log_file_path,
+            when="midnight",  # 每天午夜轮换
+            interval=1,
+            backupCount=30,  # 保留30天的日志
+            encoding='utf-8'
+        )
+        file_formatter = logging.Formatter(
+            '%(asctime)s - %(request_id)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        file_handler.setFormatter(file_formatter)
+        logger.addHandler(file_handler)
+
     return logger
 
 
