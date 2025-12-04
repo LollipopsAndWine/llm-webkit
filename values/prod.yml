@@ -1,0 +1,28 @@
+nodeSelector:
+  workfor: mineru-chem
+replicas: 1
+container:
+  port: 9501
+  resources:
+    requests:
+      cpu: 10
+      memory: 96Gi
+      nvidia.com/gpu: 1
+    limits:
+      cpu: 20
+      memory: 128Gi
+      nvidia.com/gpu: 1
+  env:
+    - name: PYTHONPATH
+      value: /app
+    - name: MODEL_PATH
+      value: /root/checkpoint-3296
+    - name: DATABASE_URL
+      value: mysql+aiomysql://mineru_ai:8L5D2_#W6tu9QWT@rm-uf6btdj3pp7idm669.mysql.rds.aliyuncs.com:3306/mineru_ai?charset=utf8mb4
+    - name: CRAWL_URL
+      value: http://realcrawl-service-prod:8081/crawl
+    - name: VLLM_USE_V1
+      value: '0'
+
+service:
+  port: 80
