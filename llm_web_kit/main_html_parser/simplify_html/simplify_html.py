@@ -17,6 +17,12 @@ inline_tags = {
     # 'td', 'th', 'dd', 'dt', 'li'
 }
 
+# 不包含块级元素
+no_block_tags = {
+    "math"
+}
+
+
 # 表格内部可能包含的跟表格相关的标签
 table_tags_set = {"caption", "colgroup", "col", "thead", "tbody", "tfoot", "tr", "td", "th"}
 
@@ -208,6 +214,8 @@ def extract_paragraphs(processing_dom: html.HtmlElement, uid_map: Dict[str, html
         return isinstance(node, html.HtmlElement)
 
     def has_block_descendants(node):
+        if node.tag in no_block_tags:
+            return False
         for child in node.iterdescendants():
             if is_block_element(child):
                 if node.tag in inline_tags:
